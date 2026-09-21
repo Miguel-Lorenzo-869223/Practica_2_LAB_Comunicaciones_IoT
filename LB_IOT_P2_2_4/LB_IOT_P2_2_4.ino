@@ -16,9 +16,6 @@ bool funcionIdle() {
   return true;
 }
 
-
-
-
 void tareaSensor(void *parameter) {
   sensors_event_t a, g, temp;
 
@@ -65,45 +62,21 @@ void tareaUART(void *parameter) {
 
 
 void setup() {
-  Serial.begin(9600);
-
+  Serial.begin(115200);
   Wire.begin(21, 22);
-
   if (!mpu.begin()) {
     Serial.println("No se encuentra el MPU6050");
-
-    while (1)
-      ;
+    while (1);
   }
-
   Serial.println("MPU6050 iniciado");
-
   pinMode(LED, OUTPUT);
   digitalWrite(LED, LOW);
-
-
   // Registrar nuestro Idle Hook
   esp_register_freertos_idle_hook(funcionIdle);
-
-
   // Crear tarea del sensor
-  xTaskCreate(
-    tareaSensor,
-    "Sensor",
-    2048,
-    NULL,
-    1,
-    NULL);
-
-
+  xTaskCreate(tareaSensor, "Sensor", 2048, NULL, 1, NULL);
   // Crear tarea UART + LED
-  xTaskCreate(
-    tareaUART,
-    "UART",
-    2048,
-    NULL,
-    1,
-    NULL);
+  xTaskCreate(tareaUART,"UART",2048,NULL,1,NULL);
 }
 
 
