@@ -1,86 +1,113 @@
+// ------------------------------------------------------------
+//  Author: Miguel A.Lorenzo
+//  Date: 21/09/2026
+//  Subject: IoT Communications Laboratory
+//  Master: MSc in Electronic Engineering
+//  University: University of Zaragoza EINA/UNIZAR
+// ------------------------------------------------------------
+/*
+ * Microcontroller: ESP32 / Arduino Framework
+ * OS: FreeRTOS
+ * Lab Assignment: Practical Exercise 2.3 (IoT Communications Laboratory)
+ * Hardware: Adafruit MPU6050 (I2C Bus: SDA=GPIO21, SCL=GPIO22), Indicator LED (GPIO23)
+ *
+ * Description:
+ *   FreeRTOS implementation utilizing concurrent tasks and an Idle Hook.
+ *   - Task 1 (task_sensor) : Periodically samples 3-axis acceleration every 100 ms via I2C.
+ *   - Task 2 (task_uart)   : Transmits acceleration metrics over UART every 1000 ms 
+ *                            and triggers an indicator LED pulse for 200 ms.
+ *   - Idle Hook            : Executes when the CPU has no active tasks to process.
+ */
+
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
-
 #include "esp_freertos_hooks.h"
 
 Adafruit_MPU6050 mpu;
 
-#define LED 23
+#define LED_PIN 23
+#define TIME_SAMPLE 100
+#define TIME_BLINK 200
+#define TIME_PRINTER 1000
 
+// Global variables to store acceleration values
 float ax, ay, az;
 
-bool funcionIdle() {
-  // Aquí el micro está sin trabajo útil.
-  // De momento no hacemos nada bloqueante.
+// FUNCTION DECLARATIONS
+bool idle_hook_function();
+void task_sensor(void *parameter);
+void task_uart(void *parameter);
+void printer();
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  while (!Serial && millis() < 2000);
+
+  Wire.begin(21, 22);
+
+  if (!mpu.begin()) {
+    Serial.println("Error: MPU6050 not found!");
+    while (1);
+  }
+
+  // Register FreeRTOS Idle Hook
+  esp_register_freertos_idle_hook(idle_hook_function);
+
+  // Create FreeRTOS Tasks
+  xTaskCreate(task_sensor, "Task_Sensor", 2048, NULL, 1, NULL);
+  xTaskCreate(task_uart,   "Task_UART",   2048, NULL, 1, NULL);
+}
+
+void loop() {
+  vTaskDelay(pdMS_TO_TICKS(TIME_PRINTER));
+}
+
+// FreeRTOS Idle Hook Callback
+bool idle_hook_function() {
+  // Microcontroller is idle in this state
   return true;
 }
 
-void tareaSensor(void *parameter) {
+// Task 1: Reads acceleration from MPU6050 every 100 ms
+void task_sensor(void *parameter) {
   sensors_event_t a, g, temp;
 
-  while (1) {
+  for (;;) {
     mpu.getEvent(&a, &g, &temp);
 
     ax = a.acceleration.x;
     ay = a.acceleration.y;
     az = a.acceleration.z;
 
-    // La tarea queda bloqueada durante 100 ms
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(TIME_SAMPLE));
   }
+  vTaskDelete(NULL);
 }
 
+// Task 2: Transmits data over UART and manages LED pulse
+void task_uart(void *parameter) {
+  for (;;) {
+    printer();
 
-void tareaUART(void *parameter) {
-  while (1) {
-    Serial.print("Accel X: ");
-    Serial.print(ax);
+    digitalWrite(LED_PIN, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(TIME_BLINK));
 
-    Serial.print(" Y: ");
-    Serial.print(ay);
-
-    Serial.print(" Z: ");
-    Serial.println(az);
-
-
-    // Encender LED cada vez que enviamos
-    digitalWrite(LED, HIGH);
-
-    // Esperar 200 ms
-    vTaskDelay(pdMS_TO_TICKS(200));
-
-    // Apagar LED
-    digitalWrite(LED, LOW);
-
-
-    // Ya hemos esperado 200 ms.
-    // Esperamos otros 800 ms para completar 1 segundo.
-    vTaskDelay(pdMS_TO_TICKS(800));
+    digitalWrite(LED_PIN, LOW);
+    vTaskDelay(pdMS_TO_TICKS(TIME_PRINTER - TIME_BLINK));
   }
+  vTaskDelete(NULL);
 }
 
-
-void setup() {
-  Serial.begin(115200);
-  Wire.begin(21, 22);
-  if (!mpu.begin()) {
-    Serial.println("No se encuentra el MPU6050");
-    while (1);
-  }
-  Serial.println("MPU6050 iniciado");
-  pinMode(LED, OUTPUT);
-  digitalWrite(LED, LOW);
-  // Registrar nuestro Idle Hook
-  esp_register_freertos_idle_hook(funcionIdle);
-  // Crear tarea del sensor
-  xTaskCreate(tareaSensor, "Sensor", 2048, NULL, 1, NULL);
-  // Crear tarea UART + LED
-  xTaskCreate(tareaUART,"UART",2048,NULL,1,NULL);
-}
-
-
-void loop() {
-  // No necesitamos hacer nada aquí
-  vTaskDelay(pdMS_TO_TICKS(1000));
+// Function to format and output acceleration values over UART
+void printer() {
+  Serial.print("Accel X: ");
+  Serial.print(ax);
+  Serial.print(" Y: ");
+  Serial.print(ay);
+  Serial.print(" Z: ");
+  Serial.println(az);
 }
