@@ -1,55 +1,63 @@
-/*
-void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(115200);
-  pinMode(02, OUTPUT);
-}
+// ------------------------------------------------------------
+//  Author: Miguel A.Lorenzo
+//  Date: 21/09/2026
+//  Subject: IoT Communications Laboratory 
+//  Master: MSc in Electronic Engineering
+//  University: University of Zaragoza EINA/UNIZAR
+// ------------------------------------------------------------
 
-void loop() {
-  digitalWrite(02, HIGH);  // change state of the LED by setting the pin to the HIGH voltage level
-  delay(1000);                      // wait for a second
-  digitalWrite(02, LOW);   // change state of the LED by setting the pin to the LOW voltage level
-  delay(1000);    
-  Serial.println("Hola Mundo");
-}
-*/
+/*
+ * Microcontroller: ESP32
+ * OS: FreeRTOS
+ * Description: Multitasking program executing two independent concurrent tasks.
+ *   - Task 1 (Blink_LED): Toggles an onboard LED (GPIO 2) every 200 ms.
+ *   - Task 2 (Envio_UART): Sends "Hola mundo" over UART (115200 baud) every 1000 ms.
+ *
+ * xTaskCreate parameters breakdown:
+ *   1. pvTaskCode    (TareaBlinkLED) : Pointer to the function that implements the task.
+ *   2. pcName        ("Blink_LED")   : Descriptive string name for debugging purposes.
+ *   3. usStackDepth  (2048)          : Stack size reserved for the task in bytes.
+ *   4. pvParameters  (NULL)          : Pointer to argument variables passed into the task.
+ *   5. uxPriority    (1)             : Execution priority (higher numbers = higher priority).
+ *   6. pxCreatedTask (NULL)          : Task handle reference for external control/deletion.
+ */
 
 #include <Arduino.h>
+
+#define LED_PIN 23
+
+void TareaBlinkLED(void *parameter);
+void TareaUART(void *parameter);
+
 void setup() {
+  Serial.begin(115200);
+  while (!Serial && millis() < 2000);
 
-  Serial.begin(112500);
-  delay(1000);
+  pinMode(LED_PIN, OUTPUT);
 
-  xTaskCreate(Tarea1,"Tarea1",10000,NULL,1,NULL);
-  xTaskCreate(Tarea2,"Tarea2",10000,NULL,1,NULL);
-
+  xTaskCreate(TareaBlinkLED, "Blink_LED", 2048, NULL, 1, NULL);
+  xTaskCreate(TareaUART, "Envio_UART", 2048, NULL, 1, NULL);
 }
 
 void loop() {
-  delay(1000);
+  vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
-void Tarea1( void * parameter ){
+void TareaBlinkLED(void *parameter) {
+  for (;;) {
+    digitalWrite(LED_PIN, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(200));
 
-    for( int i = 0;i<10;i++ ){
-
-        Serial.println("Hola desde la tarea 1");
-        delay(1000);
-    }
-
-    Serial.println("Finalizando tarea 1");
-    //vTaskDelete( NULL );
-
+    digitalWrite(LED_PIN, LOW);
+    vTaskDelay(pdMS_TO_TICKS(200));
+  }
+  vTaskDelete(NULL);
 }
 
-void Tarea2( void * parameter)
-{
-
-    for( int i = 0;i<10;i++ ){
-
-        Serial.println("Hola desde la tarea 2");
-        delay(1000);
-    }
-    Serial.println("Finalizando tarea 2");
-    //vTaskDelete( NULL );
+void TareaUART(void *parameter) {
+  for (;;) {
+    Serial.println("Hola mundo");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+  vTaskDelete(NULL);
 }
